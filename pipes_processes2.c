@@ -14,48 +14,85 @@
  */
 
 int main(int argc, char **argv) {
-  int pipefd1[2];
-  int pipefd2[2];
+  int pipefd1[2]; // Pipe for cat to grep
+int pipefd2[2]; // Pipe for grep to sort
+int pid1, pid2;
+
+// Command and arguments for cat
+char *cat_args[] = {"cat", "scores", NULL};
+
+// Command and arguments for grep, with space for user input
+char *grep_args[] = {"grep", NULL, NULL};
+
+// Command and arguments for sort
+char *sort_args[] = {"sort", NULL, NULL};
+
+// User input for grep
+grep_args[1] = argv[1];
+
+// make pipes for cat to grep and grep to sort
+pipe(pipefd1);
+pipe(pipefd2);
+
+// fork a new process for the first command
+pid1 = fork();
+
   int pid1, pid2;
 
-  char *cat_args[] = {"cat", "scores", NULL};
-  char *grep_args[] = {"grep", "Lakers", NULL};
-  char *sort_args[] = {"sort", NULL, NULL};
+// Create pipes
+int pipefd1[2];
+int pipefd2[2];
+pipe(pipefd1);
+pipe(pipefd2);
 
-  // grep_args[1] = argv[1];
-  // execvp("grep", grep_args);
+pid1 = fork();
 
-  // make a pipe (fds go in pipefd[0] and pipefd[1])
-  pipe(pipefd1); // pipe for cat to grep
-  pipe(pipefd2); // pipe for grep and sort
-
-  pid1 = fork();
-
-  if (pid1 == 0) {
+if (pid1 == 0) {
+    // Create another child process
     pid2 = fork();
+
     if (pid2 == 0) {
-      // run grep
-      close(pipefd1[1]);
-      close(pipefd2[0]);
-      dup2(pipefd1[0], 0);
-      dup2(pipefd2[1], 1);
-      grep_args[1] = argv[1];
-      execvp("grep", grep_args);
+        // This is the child process running grep
+
+        // Close unused ends of pipes
+        close(pipefd1[1]);
+        close(pipefd2[0]);
+
+        // Redirect standard input and output to pipes
+        dup2(pipefd1[0], 0);
+        dup2(pipefd2[1], 1);
+
+        // Set grep argument and run grep
+        grep_args[1] = argv[1];
+        execvp("grep", grep_args);
 
     } else {
-      // run cat
-      close(pipefd1[0]);
-      close(pipefd2[0]);
-      close(pipefd2[1]);
-      dup2(pipefd1[1], 1);
-      execvp("cat", cat_args);
+        // This is the original child process running cat
+
+        // Close unused ends of pipes
+        close(pipefd1[0]);
+        close(pipefd2[0]);
+        close(pipefd2[1]);
+
+        // Redirect standard output to pipe
+        dup2(pipefd1[1], 1);
+
+        // Run cat
+        execvp("cat", cat_args);
     }
-  } else {
-    // run sort
+} else {
+    // This is the parent process running sort
+
+    // Close unused ends of pipes
     close(pipefd2[1]);
     close(pipefd1[0]);
     close(pipefd1[1]);
+
+    // Redirect standard input to pipe
     dup2(pipefd2[0], 0);
+
+    // Run sort
     execvp("sort", sort_args);
-  }
+}
+
 }
